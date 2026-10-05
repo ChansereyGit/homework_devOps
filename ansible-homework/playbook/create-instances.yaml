@@ -1,0 +1,131 @@
+---
+- name: Create GCP Instances
+  hosts: localhost
+  become: true
+  vars_files:
+    - ../vars/config.yaml
+  tasks:
+    - name: Read SSH public key
+      slurp:
+        src: "{{ ssh_public_key }}"
+      register: ssh_pub_key
+
+    - name: Install Python packages
+      apt:
+        name:
+          - python3-requests
+          - python3-google-auth
+        state: present
+        update_cache: yes
+
+    - name: Create master instances
+      google.cloud.gcp_compute_instance:
+        name: "{{ item.name }}"
+        machine_type: "{{ item.machine_type }}"
+        zone: "{{ item.zone }}"
+        project: "{{ google_project_id }}"
+        auth_kind: application
+        state: present
+        metadata:
+          ssh-keys: "{{ ssh_username }}:{{ ssh_pub_key['content'] | b64decode }}"
+          startup-script: |
+            #!/bin/bash
+            apt-get update && apt-get upgrade -y
+            apt-get install -y curl wget git vim htop
+        disks:
+          - auto_delete: true
+            boot: true
+            initialize_params:
+              source_image: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+              disk_size_gb: "{{ item.disk_size }}"
+              disk_type: "{{ item.disk_type }}"
+        network_interfaces:
+          - network:
+              selfLink: "projects/{{ google_project_id }}/global/networks/default"
+            access_configs:
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+        tags:
+          items:
+            - http-server
+            - https-server
+      loop: "{{ masters }}"
+      register: masters_result
+      environment:
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ adc_path }}"
+        GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES: "1"
+
+    - name: Create worker instances
+      google.cloud.gcp_compute_instance:
+        name: "{{ item.name }}"
+        machine_type: "{{ item.machine_type }}"
+        zone: "{{ item.zone }}"
+        project: "{{ google_project_id }}"
+        auth_kind: application
+        state: present
+        metadata:
+          ssh-keys: "{{ ssh_username }}:{{ ssh_pub_key['content'] | b64decode }}"
+          startup-script: |
+            #!/bin/bash
+            apt-get update && apt-get upgrade -y
+            apt-get install -y curl wget git vim htop
+        disks:
+          - auto_delete: true
+            boot: true
+            initialize_params:
+              source_image: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+              disk_size_gb: "{{ item.disk_size }}"
+              disk_type: "{{ item.disk_type }}"
+        network_interfaces:
+          - network:
+              selfLink: "projects/{{ google_project_id }}/global/networks/default"
+            access_configs:
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+        tags:
+          items:
+            - http-server
+            - https-server
+      loop: "{{ workers }}"
+      register: workers_result
+      environment:
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ adc_path }}"
+        GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES: "1"
+
+    - name: Wait for instances to be ready
+      pause:
+        seconds: 30
+
+    - name: Update inventory with masters
+      lineinfile:
+        path: ../inventory.ini
+        insertafter: '^\[masters\]'
+        line: "{{ item.item.name }} ansible_host={{ item.networkInterfaces[0].accessConfigs[0].natIP }}"
+        state: present
+      loop: "{{ masters_result.results }}"
+      when: item.networkInterfaces is defined
+
+    - name: Update inventory with workers
+      lineinfile:
+        path: ../inventory.ini
+        insertafter: '^\[workers\]'
+        line: "{{ item.item.name }} ansible_host={{ item.networkInterfaces[0].accessConfigs[0].natIP }}"
+        state: present
+      loop: "{{ workers_result.results }}"
+      when: item.networkInterfaces is defined
+
+    - name: Display created instances
+      debug:
+        msg: |
+          Masters: {{ masters_result.results | map(attribute='item.name') | list }}
+          Workers: {{ workers_result.results | map(attribute='item.name') | list }}
+
+    - name: Test SSH connectivity to all instances
+      command: ansible all -m ping -i ../inventory.ini
+      register: ping_result
+      ignore_errors: yes
+      become: false
+
+    - name: Show SSH connectivity results
+      debug:
+        var: ping_result.stdout_lines

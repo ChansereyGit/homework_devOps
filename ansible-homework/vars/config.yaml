@@ -1,0 +1,29 @@
+google_project_id: my-project-devops-504714
+zone: asia-southeast1-c
+adc_path: "/home/samnangchanserey/.config/gcloud/application_default_credentials.json"
+ssh_public_key: /home/samnangchanserey/.ssh/id_ed25519.pub
+ssh_username: samnangchanserey
+
+masters:
+  - name: master01
+    machine_type: e2-standard-2
+    zone: asia-southeast1-c
+    disk_size: 50
+    disk_type: pd-standard
+  - name: master02
+    machine_type: e2-standard-2
+    zone: asia-southeast1-c
+    disk_size: 50
+    disk_type: pd-standard
+
+workers:
+  - name: worker01
+    machine_type: e2-medium
+    zone: asia-southeast1-a
+    disk_size: 40
+    disk_type: pd-standard
+  - name: worker02
+    machine_type: e2-medium
+    zone: asia-southeast1-a
+    disk_size: 40
+    disk_type: pd-standard
