@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Gradle wrapper script for Unix-like systems
+
+GRADLE_VERSION=8.5
+APP_BASE_NAME=`basename "$0"`
+
+exec java -jar gradle/wrapper/gradle-wrapper.jar "$@"
