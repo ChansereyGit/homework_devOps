@@ -7,7 +7,5 @@ def call(String imageName, String tag, String dockerfileType){
         writeFile file: "nginx.conf", text: nginxConfig
     }
     
-    sh """
-        docker build -t ${imageName}:${tag} .
-    """
+    sh "docker build -t ${imageName}:${tag} ."
 }

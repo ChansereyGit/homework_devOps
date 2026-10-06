@@ -2,7 +2,6 @@
 
 pipeline {
     agent any
-
     environment{
         TAG="v1.0.${env.BUILD_NUMBER}"
         IMG_NAME="react-demo-app"
@@ -11,14 +10,12 @@ pipeline {
         CHAT_ID=credentials('telegram-chat-id')
         TOKEN=credentials('telegram-bot-token')
     }
-
     stages {
         stage("Checkout"){
             steps{
                 git 'https://github.com/ChansereyGit/react-demo-app.git'
             }
         }
-
         stage("Scan with Sonarqube"){
             steps{
                 script{
@@ -27,7 +24,6 @@ pipeline {
                 }
             }
         }
-
         stage("Wait for QualityGate"){
             steps{
                 script{
@@ -39,7 +35,6 @@ pipeline {
                 }
             }
         }
-
         stage('Build'){
             steps{
                 script{
@@ -47,7 +42,6 @@ pipeline {
                 }
             }
         }
-
         stage("Push"){
             steps{
                 script{
@@ -55,7 +49,6 @@ pipeline {
                 }
             }
         }
-
         stage("Deploy"){
             steps{
                 script{
@@ -64,16 +57,15 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             script {
-                sendTelegram("Build Success: ${env.JOB_NAME} #${env.BUILD_NUMBER}","${TOKEN}","${CHAT_ID}")
+                sendTelegram("Build Success: ${env.JOB_NAME}","${TOKEN}","${CHAT_ID}")
             }
         }
         failure {
             script {
-                sendTelegram("Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}","${TOKEN}","${CHAT_ID}")
+                sendTelegram("Build Failed: ${env.JOB_NAME}","${TOKEN}","${CHAT_ID}")
             }
         }
     }
