@@ -3,60 +3,46 @@
 pipeline {
     agent any
     
-    environment {
-        IMAGE_NAME = "chanserey/spring-demo-app"
-        IMAGE_TAG = "v1.0.${env.BUILD_NUMBER}"
-        CONTAINER_NAME = "spring-demo-prod"
-        CONTAINER_PORT = "8080"
-        
-        TELEGRAM_TOKEN = credentials('telegram-bot-token')
-        TELEGRAM_CHAT_ID = credentials('telegram-chat-id')
+    environment{
+        TAG="v1.0.${env.BUILD_NUMBER}"
+        IMG_NAME="spring-demo-app"
+        DH_USER="chanserey"
+        FULL_IMG="${DH_USER}/${IMG_NAME}:${TAG}"
+        CHAT_ID=credentials('telegram-chat-id')
+        TOKEN=credentials('telegram-bot-token')
     }
     
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'https://github.com/ChansereyGit/spring-demo-app.git'
-                sendTelegram("🚀 Spring Boot build started", "${TELEGRAM_TOKEN}", "${TELEGRAM_CHAT_ID}")
+        stage("Checkout"){
+            steps{
+                git 'https://github.com/ChansereyGit/spring-demo-app.git'
             }
         }
         
-        stage('Test') {
-            steps {
-                script {
-                    sh './gradlew test'
+        stage('Build'){
+            steps{
+                script{
+                    buildDockerImage("${FULL_IMG}", "${TAG}", "spring")
                 }
             }
         }
         
-        stage('Build JAR') {
-            steps {
-                script {
-                    sh './gradlew clean build -x test'
+        stage("Push"){
+            steps{
+                script{
+                    pushDockerImage("${DH_USER}/${IMG_NAME}", "${TAG}", "dockerhub-credentials")
                 }
             }
         }
         
-        stage('Build Image') {
-            steps {
-                script {
-                    buildDockerImage.spring("${IMAGE_NAME}", "${IMAGE_TAG}")
-                }
-            }
-        }
-        
-        stage('Push Image') {
-            steps {
-                script {
-                    pushDockerImage("${IMAGE_NAME}:${IMAGE_TAG}", "dockerhub-credentials")
-                }
-            }
-        }
-        
-        stage('Deploy') {
-            steps {
-                script {
-                    deployContainer.spring("${IMAGE_NAME}:${IMAGE_TAG}", "${CONTAINER_NAME}", "${CONTAINER_PORT}")
+        stage("Deploy"){
+            steps{
+                script{
+                    sh """
+                        docker stop spring-app || true
+                        docker rm spring-app || true
+                        docker run -dp 8080:8080 --name spring-app ${FULL_IMG}
+                    """
                 }
             }
         }
@@ -65,12 +51,12 @@ pipeline {
     post {
         success {
             script {
-                sendTelegram.buildNotification("SUCCESS", "${TELEGRAM_TOKEN}", "${TELEGRAM_CHAT_ID}")
+                sendTelegram("Build Success: ${env.JOB_NAME}","${TOKEN}","${CHAT_ID}")
             }
         }
         failure {
             script {
-                sendTelegram.buildNotification("FAILURE", "${TELEGRAM_TOKEN}", "${TELEGRAM_CHAT_ID}")
+                sendTelegram("Build Failed: ${env.JOB_NAME}","${TOKEN}","${CHAT_ID}")
             }
         }
     }
